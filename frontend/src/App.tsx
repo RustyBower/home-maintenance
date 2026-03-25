@@ -17,6 +17,7 @@ function App() {
       <div className="app">
         <nav className="sidebar">
           <div className="logo">
+            <img src="/favicon.svg" alt="" width="28" height="28" />
             <h2>Home Maint.</h2>
           </div>
           <NavLink to="/" end>
