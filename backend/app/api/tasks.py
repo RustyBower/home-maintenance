@@ -267,6 +267,7 @@ def home_assistant_sensor(db: Session = Depends(get_db)):
             "unit_of_measurement": "tasks",
             "icon": "mdi:home-alert",
         },
+        "_note": "This endpoint is maintained for backwards compatibility. See /api/ha/sensors for richer data.",
     }
 
 

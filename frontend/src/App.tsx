@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle, Bell, FileText, Download, ClipboardList, Receipt, ClipboardCheck } from "lucide-react";
+import {
+  Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings,
+  Box, Users, AlertCircle, Bell, FileText, Download, ClipboardList,
+  Receipt, ClipboardCheck, Cpu, TrendingUp, ChevronDown, ChevronRight,
+} from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import TaskList from "./pages/TaskList";
 import TaskDetail from "./pages/TaskDetail";
@@ -21,7 +26,22 @@ import ExportImport from "./pages/ExportImport";
 import Activity from "./pages/Activity";
 import Expenses from "./pages/Expenses";
 import Checklists from "./pages/Checklists";
+import HomeAssistant from "./pages/HomeAssistant";
+import Budget from "./pages/Budget";
 import "./App.css";
+
+function NavGroup({ label, children, defaultOpen = true }: { label: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="nav-group">
+      <button className="nav-group-label" onClick={() => setOpen(!open)}>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {label}
+      </button>
+      {open && <div className="nav-group-items">{children}</div>}
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -32,57 +52,76 @@ function App() {
             <img src="/favicon.svg" alt="" width="28" height="28" />
             <h2>Home Maint.</h2>
           </div>
+
           <NavLink to="/" end>
             <Home size={18} /> Dashboard
           </NavLink>
-          <NavLink to="/tasks">
-            <List size={18} /> All Tasks
-          </NavLink>
-          <NavLink to="/weekend">
-            <Wrench size={18} /> Weekend Plan
-          </NavLink>
-          <NavLink to="/timeline">
-            <Calendar size={18} /> Timeline
-          </NavLink>
-          <NavLink to="/costs">
-            <DollarSign size={18} /> Costs
-          </NavLink>
-          <NavLink to="/assets">
-            <Box size={18} /> Assets
-          </NavLink>
-          <NavLink to="/contractors">
-            <Users size={18} /> Contractors
-          </NavLink>
-          <NavLink to="/repairs">
-            <AlertCircle size={18} /> Repairs
-          </NavLink>
-          <NavLink to="/supplies">
-            <Package size={18} /> Supplies
-          </NavLink>
-          <NavLink to="/expenses">
-            <Receipt size={18} /> Expenses
-          </NavLink>
-          <NavLink to="/checklists">
-            <ClipboardCheck size={18} /> Checklists
-          </NavLink>
-          <NavLink to="/activity">
-            <ClipboardList size={18} /> Activity
-          </NavLink>
-          <NavLink to="/documents">
-            <FileText size={18} /> Documents
-          </NavLink>
-          <NavLink to="/notifications">
-            <Bell size={18} /> Notifications
-          </NavLink>
-          <NavLink to="/export">
-            <Download size={18} /> Export
-          </NavLink>
-          <NavLink to="/tasks/new">
-            <Plus size={18} /> Add Task
-          </NavLink>
-          <NavLink to="/setup">
-            <Settings size={18} /> Setup
-          </NavLink>
+
+          <NavGroup label="Tasks">
+            <NavLink to="/tasks">
+              <List size={18} /> All Tasks
+            </NavLink>
+            <NavLink to="/weekend">
+              <Wrench size={18} /> Weekend Plan
+            </NavLink>
+            <NavLink to="/timeline">
+              <Calendar size={18} /> Timeline
+            </NavLink>
+            <NavLink to="/checklists">
+              <ClipboardCheck size={18} /> Checklists
+            </NavLink>
+            <NavLink to="/tasks/new">
+              <Plus size={18} /> Add Task
+            </NavLink>
+          </NavGroup>
+
+          <NavGroup label="Property">
+            <NavLink to="/assets">
+              <Box size={18} /> Assets
+            </NavLink>
+            <NavLink to="/contractors">
+              <Users size={18} /> Contractors
+            </NavLink>
+            <NavLink to="/repairs">
+              <AlertCircle size={18} /> Repairs
+            </NavLink>
+            <NavLink to="/supplies">
+              <Package size={18} /> Supplies
+            </NavLink>
+            <NavLink to="/documents">
+              <FileText size={18} /> Documents
+            </NavLink>
+          </NavGroup>
+
+          <NavGroup label="Finances">
+            <NavLink to="/costs">
+              <DollarSign size={18} /> Cost History
+            </NavLink>
+            <NavLink to="/expenses">
+              <Receipt size={18} /> Recurring
+            </NavLink>
+            <NavLink to="/budget">
+              <TrendingUp size={18} /> Budget
+            </NavLink>
+          </NavGroup>
+
+          <NavGroup label="System" defaultOpen={false}>
+            <NavLink to="/activity">
+              <ClipboardList size={18} /> Activity
+            </NavLink>
+            <NavLink to="/notifications">
+              <Bell size={18} /> Notifications
+            </NavLink>
+            <NavLink to="/homeassistant">
+              <Cpu size={18} /> Home Assistant
+            </NavLink>
+            <NavLink to="/export">
+              <Download size={18} /> Export
+            </NavLink>
+            <NavLink to="/setup">
+              <Settings size={18} /> Setup
+            </NavLink>
+          </NavGroup>
         </nav>
         <main className="content">
           <Routes>
@@ -106,6 +145,8 @@ function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/export" element={<ExportImport />} />
+            <Route path="/homeassistant" element={<HomeAssistant />} />
+            <Route path="/budget" element={<Budget />} />
             <Route path="/setup" element={<Setup />} />
           </Routes>
         </main>

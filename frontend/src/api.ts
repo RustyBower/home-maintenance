@@ -788,6 +788,41 @@ export async function fetchActivity(params?: {
   return res.json();
 }
 
+// === Home Assistant ===
+
+export interface HASensors {
+  overdue_total: number;
+  due_today_total: number;
+  upcoming_7d_total: number;
+  overdue_by_category: Record<string, number>;
+  next_task: { name: string; due: string; category: string } | null;
+  open_repairs: number;
+  total_monthly_cost: number;
+  low_stock_supplies: number;
+  active_checklists: number;
+}
+
+export interface MQTTConfigEntry {
+  topic: string;
+  payload: Record<string, unknown>;
+}
+
+export interface MQTTConfig {
+  configs: MQTTConfigEntry[];
+}
+
+export async function fetchHASensors(): Promise<HASensors> {
+  const res = await fetch(`${API_BASE}/ha/sensors`);
+  if (!res.ok) throw new Error("Failed to fetch HA sensors");
+  return res.json();
+}
+
+export async function fetchHAMQTTConfig(): Promise<MQTTConfig> {
+  const res = await fetch(`${API_BASE}/ha/mqtt-config`);
+  if (!res.ok) throw new Error("Failed to fetch MQTT config");
+  return res.json();
+}
+
 export function formatMinutes(mins: number): string {
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);

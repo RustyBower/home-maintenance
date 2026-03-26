@@ -14,6 +14,8 @@ from app.api.notifications import router as notifications_router
 from app.api.expenses import router as expenses_router
 from app.api.checklists import router as checklists_router
 from app.api.export import router as export_router
+from app.api.homeassistant import router as ha_router
+from app.api.budget import router as budget_router
 
 app = FastAPI(title="Home Maintenance Tracker")
 
@@ -29,6 +31,8 @@ app.include_router(notifications_router)
 app.include_router(expenses_router)
 app.include_router(checklists_router)
 app.include_router(export_router)
+app.include_router(ha_router)
+app.include_router(budget_router)
 
 
 @app.get("/api/health")
