@@ -621,6 +621,59 @@ export async function deleteDocument(id: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete document");
 }
 
+// === Export / Import ===
+
+export interface ImportSummary {
+  imported: Record<string, number>;
+  skipped: Record<string, number>;
+}
+
+export async function exportJSON(): Promise<void> {
+  const res = await fetch(`${API_BASE}/export/json`);
+  if (!res.ok) throw new Error("Failed to export JSON");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?(.+?)"?$/);
+  a.download = match ? match[1] : "home-maintenance-backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function importJSON(data: unknown): Promise<ImportSummary> {
+  const res = await fetch(`${API_BASE}/export/import-json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to import JSON");
+  return res.json();
+}
+
+export async function exportCSV(type: "tasks" | "completions" | "assets" | "repairs"): Promise<void> {
+  const res = await fetch(`${API_BASE}/export/csv/${type}`);
+  if (!res.ok) throw new Error("Failed to export CSV");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?(.+?)"?$/);
+  a.download = match ? match[1] : `${type}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function exportPDFReport(): void {
+  window.open(`${API_BASE}/export/pdf`, "_blank");
+}
+
 export const CHANNEL_TYPES = [
   { value: "email", label: "Email" },
   { value: "webhook", label: "Webhook" },

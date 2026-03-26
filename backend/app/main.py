@@ -10,6 +10,7 @@ from app.api.repairs import router as repairs_router
 from app.api.documents import router as documents_router
 from app.api.setup import router as setup_router
 from app.api.notifications import router as notifications_router
+from app.api.export import router as export_router
 
 app = FastAPI(title="Home Maintenance Tracker")
 
@@ -21,6 +22,7 @@ app.include_router(repairs_router)
 app.include_router(documents_router)
 app.include_router(setup_router)
 app.include_router(notifications_router)
+app.include_router(export_router)
 
 
 @app.get("/api/health")
