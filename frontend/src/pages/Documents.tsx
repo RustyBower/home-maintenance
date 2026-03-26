@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, FileText, ExternalLink, Pencil, Trash2, Upload, Paperclip, Download } from "lucide-react";
+import { Plus, FileText, ExternalLink, Pencil, Trash2, Upload, Paperclip, Download, X, Eye } from "lucide-react";
 import {
   fetchDocuments, createDocument, updateDocument, deleteDocument,
-  uploadDocument, uploadDocumentFile, formatFileSize,
+  uploadDocument, uploadDocumentFile, downloadDocumentUrl, createDocumentFromUrl,
+  formatFileSize,
   fetchAssets, fetchTasks,
   DOC_TYPES, DOC_TYPE_COLORS, EXPIRY_STATUS_COLORS,
   type Document, type Asset, type Task,
@@ -47,6 +48,16 @@ const emptyForm = {
   notes: "",
 };
 
+function isImageMime(mime: string | null): boolean {
+  if (!mime) return false;
+  return /^image\/(jpeg|jpg|png|gif|webp|svg)/.test(mime);
+}
+
+function isPdfMime(mime: string | null): boolean {
+  if (!mime) return false;
+  return mime === "application/pdf";
+}
+
 export default function Documents() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -61,6 +72,13 @@ export default function Documents() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const [attachingDocId, setAttachingDocId] = useState<number | null>(null);
+  const [saveLocally, setSaveLocally] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveWarning, setSaveWarning] = useState("");
+
+  // Preview modal state
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const load = () => {
     fetchDocuments({ doc_type: filterType || undefined }).then(setDocs);
@@ -77,6 +95,8 @@ export default function Documents() {
     setEditingId(null);
     setForm({ ...emptyForm });
     setSelectedFile(null);
+    setSaveLocally(true);
+    setSaveWarning("");
     setShowModal(true);
   }
 
@@ -93,6 +113,8 @@ export default function Documents() {
       notes: doc.notes || "",
     });
     setSelectedFile(null);
+    setSaveLocally(true);
+    setSaveWarning("");
     setShowModal(true);
   }
 
@@ -104,48 +126,82 @@ export default function Documents() {
   }
 
   async function handleSave() {
-    if (!editingId && selectedFile) {
-      // Upload with file
-      await uploadDocument(selectedFile, {
-        name: form.name || undefined,
-        doc_type: form.doc_type,
-        asset_id: form.asset_id ? parseInt(form.asset_id) : undefined,
-        task_id: form.task_id ? parseInt(form.task_id) : undefined,
-        repair_id: form.repair_id ? parseInt(form.repair_id) : undefined,
-        expiry_date: form.expiry_date || undefined,
-        notes: form.notes || undefined,
-      });
-    } else if (editingId) {
-      const payload: Record<string, unknown> = {
-        name: form.name,
-        doc_type: form.doc_type,
-        url: form.url || null,
-        asset_id: form.asset_id ? parseInt(form.asset_id) : null,
-        task_id: form.task_id ? parseInt(form.task_id) : null,
-        repair_id: form.repair_id ? parseInt(form.repair_id) : null,
-        expiry_date: form.expiry_date || null,
-        notes: form.notes || null,
-      };
-      await updateDocument(editingId, payload as Partial<Document>);
-      if (selectedFile) {
-        await uploadDocumentFile(editingId, selectedFile);
+    setSaving(true);
+    setSaveWarning("");
+    try {
+      if (!editingId && selectedFile) {
+        // Upload with file
+        await uploadDocument(selectedFile, {
+          name: form.name || undefined,
+          doc_type: form.doc_type,
+          asset_id: form.asset_id ? parseInt(form.asset_id) : undefined,
+          task_id: form.task_id ? parseInt(form.task_id) : undefined,
+          repair_id: form.repair_id ? parseInt(form.repair_id) : undefined,
+          expiry_date: form.expiry_date || undefined,
+          notes: form.notes || undefined,
+        });
+      } else if (!editingId && !selectedFile && form.url && saveLocally) {
+        // Create from URL with local download
+        try {
+          await createDocumentFromUrl({
+            url: form.url,
+            name: form.name || undefined,
+            doc_type: form.doc_type,
+            asset_id: form.asset_id ? parseInt(form.asset_id) : undefined,
+            task_id: form.task_id ? parseInt(form.task_id) : undefined,
+            repair_id: form.repair_id ? parseInt(form.repair_id) : undefined,
+            expiry_date: form.expiry_date || undefined,
+            notes: form.notes || undefined,
+          });
+        } catch {
+          // Download failed - fall back to creating with just the URL
+          setSaveWarning("Download failed. Document created with URL only.");
+          const payload: Record<string, unknown> = {
+            name: form.name,
+            doc_type: form.doc_type,
+            url: form.url || null,
+            asset_id: form.asset_id ? parseInt(form.asset_id) : null,
+            task_id: form.task_id ? parseInt(form.task_id) : null,
+            repair_id: form.repair_id ? parseInt(form.repair_id) : null,
+            expiry_date: form.expiry_date || null,
+            notes: form.notes || null,
+          };
+          await createDocument(payload as Parameters<typeof createDocument>[0]);
+        }
+      } else if (editingId) {
+        const payload: Record<string, unknown> = {
+          name: form.name,
+          doc_type: form.doc_type,
+          url: form.url || null,
+          asset_id: form.asset_id ? parseInt(form.asset_id) : null,
+          task_id: form.task_id ? parseInt(form.task_id) : null,
+          repair_id: form.repair_id ? parseInt(form.repair_id) : null,
+          expiry_date: form.expiry_date || null,
+          notes: form.notes || null,
+        };
+        await updateDocument(editingId, payload as Partial<Document>);
+        if (selectedFile) {
+          await uploadDocumentFile(editingId, selectedFile);
+        }
+      } else {
+        // URL-only create
+        const payload: Record<string, unknown> = {
+          name: form.name,
+          doc_type: form.doc_type,
+          url: form.url || null,
+          asset_id: form.asset_id ? parseInt(form.asset_id) : null,
+          task_id: form.task_id ? parseInt(form.task_id) : null,
+          repair_id: form.repair_id ? parseInt(form.repair_id) : null,
+          expiry_date: form.expiry_date || null,
+          notes: form.notes || null,
+        };
+        await createDocument(payload as Parameters<typeof createDocument>[0]);
       }
-    } else {
-      // URL-only create
-      const payload: Record<string, unknown> = {
-        name: form.name,
-        doc_type: form.doc_type,
-        url: form.url || null,
-        asset_id: form.asset_id ? parseInt(form.asset_id) : null,
-        task_id: form.task_id ? parseInt(form.task_id) : null,
-        repair_id: form.repair_id ? parseInt(form.repair_id) : null,
-        expiry_date: form.expiry_date || null,
-        notes: form.notes || null,
-      };
-      await createDocument(payload as Parameters<typeof createDocument>[0]);
+      setShowModal(false);
+      load();
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
-    load();
   }
 
   async function handleDelete(id: number) {
@@ -157,6 +213,19 @@ export default function Documents() {
   async function handleAttachFile(docId: number, file: File) {
     await uploadDocumentFile(docId, file);
     load();
+  }
+
+  async function handleDownloadUrl(doc: Document) {
+    setDownloading(true);
+    try {
+      const updated = await downloadDocumentUrl(doc.id);
+      setPreviewDoc(updated);
+      load();
+    } catch {
+      alert("Failed to download file from URL.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   function linkedEntity(doc: Document): string | null {
@@ -185,6 +254,9 @@ export default function Documents() {
   });
 
   const canSave = form.name && (form.url || selectedFile);
+
+  // Whether the create form should show the "save locally" toggle
+  const showSaveLocallyToggle = !editingId && !selectedFile && !!form.url;
 
   return (
     <div>
@@ -229,8 +301,6 @@ export default function Documents() {
           sorted.map((doc) => {
             const typeLabel = DOC_TYPES.find((t) => t.value === doc.doc_type)?.label ?? doc.doc_type;
             const linked = linkedEntity(doc);
-            const docLink = doc.file_url || doc.url;
-            const isFile = !!doc.file_url;
             return (
               <div key={doc.id} className="task-item" style={{ cursor: "default" }}>
                 <div className="task-info">
@@ -238,20 +308,13 @@ export default function Documents() {
                     className="cat-dot"
                     style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }}
                   />
-                  {docLink ? (
-                    <a
-                      href={docLink}
-                      target={isFile ? undefined : "_blank"}
-                      rel="noreferrer"
-                      className="task-name"
-                      style={{ color: "var(--accent)", textDecoration: "none" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {doc.name} {isFile ? <Download size={12} style={{ verticalAlign: "middle" }} /> : <ExternalLink size={12} style={{ verticalAlign: "middle" }} />}
-                    </a>
-                  ) : (
-                    <span className="task-name">{doc.name}</span>
-                  )}
+                  <span
+                    className="task-name"
+                    style={{ color: "var(--accent)", cursor: "pointer" }}
+                    onClick={() => setPreviewDoc(doc)}
+                  >
+                    {doc.name} <Eye size={12} style={{ verticalAlign: "middle", opacity: 0.6 }} />
+                  </span>
                 </div>
                 <div className="task-meta">
                   <span
@@ -325,6 +388,7 @@ export default function Documents() {
         )}
       </div>
 
+      {/* Create/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 500, maxHeight: "90vh", overflowY: "auto" }}>
@@ -411,6 +475,37 @@ export default function Documents() {
               )}
             </div>
 
+            {showSaveLocallyToggle && (
+              <div className="form-group">
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={saveLocally}
+                    onChange={(e) => setSaveLocally(e.target.checked)}
+                  />
+                  Save file locally (download from URL)
+                </label>
+                {saveLocally && (
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                    The file will be downloaded and stored on the server
+                  </div>
+                )}
+              </div>
+            )}
+
+            {saveWarning && (
+              <div style={{
+                fontSize: "0.8125rem",
+                color: "var(--warning)",
+                background: "rgba(245,158,11,0.1)",
+                padding: "0.5rem 0.75rem",
+                borderRadius: 6,
+                marginBottom: "1rem",
+              }}>
+                {saveWarning}
+              </div>
+            )}
+
             <div className="grid-2">
               <div className="form-group">
                 <label>Document Type</label>
@@ -467,9 +562,167 @@ export default function Documents() {
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
-                {editingId ? "Save Changes" : "Add Document"}
+              <button className="btn btn-primary" onClick={handleSave} disabled={!canSave || saving}>
+                {saving ? (saveLocally && form.url && !selectedFile ? "Downloading..." : "Saving...") : (editingId ? "Save Changes" : "Add Document")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewDoc && (
+        <div className="modal-overlay" onClick={() => setPreviewDoc(null)}>
+          <div className="modal-preview" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="modal-preview-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: 0 }}>
+                <span
+                  className="badge badge-category"
+                  style={{ backgroundColor: DOC_TYPE_COLORS[previewDoc.doc_type], flexShrink: 0 }}
+                >
+                  {DOC_TYPES.find((t) => t.value === previewDoc.doc_type)?.label ?? previewDoc.doc_type}
+                </span>
+                <span style={{ fontSize: "1rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {previewDoc.name}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexShrink: 0 }}>
+                {previewDoc.file_url && (
+                  <>
+                    <a
+                      href={previewDoc.file_url}
+                      download
+                      className="btn btn-ghost"
+                      style={{ padding: "0.375rem 0.75rem", textDecoration: "none" }}
+                    >
+                      <Download size={14} /> Download
+                    </a>
+                    <a
+                      href={previewDoc.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-ghost"
+                      style={{ padding: "0.375rem 0.75rem", textDecoration: "none" }}
+                    >
+                      <ExternalLink size={14} /> Open in New Tab
+                    </a>
+                  </>
+                )}
+                {previewDoc.url && !previewDoc.file_url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-ghost"
+                    style={{ padding: "0.375rem 0.75rem", textDecoration: "none" }}
+                  >
+                    <ExternalLink size={14} /> Open URL
+                  </a>
+                )}
+                <button className="btn btn-ghost" style={{ padding: "0.375rem" }} onClick={() => setPreviewDoc(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="modal-preview-body">
+              {previewDoc.file_url && isPdfMime(previewDoc.mime_type) ? (
+                <iframe
+                  src={previewDoc.file_url}
+                  style={{ width: "100%", height: "100%", border: "none", borderRadius: 4 }}
+                  title={previewDoc.name}
+                />
+              ) : previewDoc.file_url && isImageMime(previewDoc.mime_type) ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", overflow: "auto" }}>
+                  <img
+                    src={previewDoc.file_url}
+                    alt={previewDoc.name}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 4 }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "1.5rem" }}>
+                  <FileText size={48} style={{ opacity: 0.3 }} />
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "1.125rem", fontWeight: 500, marginBottom: "0.5rem" }}>{previewDoc.name}</div>
+                    {previewDoc.mime_type && (
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>Type: {previewDoc.mime_type}</div>
+                    )}
+                    {previewDoc.file_size != null && (
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>Size: {formatFileSize(previewDoc.file_size)}</div>
+                    )}
+                  </div>
+
+                  {/* If no local file but has URL, show download button */}
+                  {!previewDoc.file_url && previewDoc.url && (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                        This document links to an external URL. Download it to preview or view locally.
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleDownloadUrl(previewDoc)}
+                        disabled={downloading}
+                      >
+                        <Download size={14} /> {downloading ? "Downloading..." : "Download & Save Locally"}
+                      </button>
+                    </div>
+                  )}
+
+                  {previewDoc.file_url && (
+                    <a
+                      href={previewDoc.file_url}
+                      download
+                      className="btn btn-primary"
+                      style={{ textDecoration: "none" }}
+                    >
+                      <Download size={14} /> Download File
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Metadata footer */}
+            <div className="modal-preview-footer">
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+                <span
+                  className="badge"
+                  style={{
+                    backgroundColor: EXPIRY_STATUS_COLORS[previewDoc.expiry_status] + "22",
+                    color: EXPIRY_STATUS_COLORS[previewDoc.expiry_status],
+                  }}
+                >
+                  {EXPIRY_LABELS[previewDoc.expiry_status]}
+                </span>
+                {previewDoc.expiry_date && (
+                  <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                    Expires: {formatDate(previewDoc.expiry_date)}
+                  </span>
+                )}
+                {linkedEntity(previewDoc) && (
+                  <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                    {linkedEntity(previewDoc)}
+                  </span>
+                )}
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: "0.8125rem", color: "var(--accent)", textDecoration: "none" }}
+                  >
+                    Source URL <ExternalLink size={10} style={{ verticalAlign: "middle" }} />
+                  </a>
+                )}
+              </div>
+              {previewDoc.notes && (
+                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
+                  {previewDoc.notes}
+                </div>
+              )}
             </div>
           </div>
         </div>

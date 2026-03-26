@@ -43,6 +43,17 @@ class DocumentCreate(BaseModel):
     expiry_date: date | None = None
 
 
+class DocumentCreateFromUrl(BaseModel):
+    url: str
+    name: str | None = None
+    doc_type: DocumentType = DocumentType.OTHER
+    asset_id: int | None = None
+    task_id: int | None = None
+    repair_id: int | None = None
+    notes: str | None = None
+    expiry_date: date | None = None
+
+
 class DocumentUpdate(BaseModel):
     name: str | None = None
     doc_type: DocumentType | None = None

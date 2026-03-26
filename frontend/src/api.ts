@@ -654,6 +654,33 @@ export async function uploadDocument(
   return res.json();
 }
 
+export async function downloadDocumentUrl(id: number): Promise<Document> {
+  const res = await fetch(`${API_BASE}/documents/${id}/download-url`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to download from URL");
+  return res.json();
+}
+
+export async function createDocumentFromUrl(data: {
+  url: string;
+  name?: string;
+  doc_type?: string;
+  asset_id?: number;
+  task_id?: number;
+  repair_id?: number;
+  notes?: string;
+  expiry_date?: string;
+}): Promise<Document> {
+  const res = await fetch(`${API_BASE}/documents/create-from-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create document from URL");
+  return res.json();
+}
+
 export async function uploadDocumentFile(id: number, file: File): Promise<Document> {
   const formData = new FormData();
   formData.append("file", file);

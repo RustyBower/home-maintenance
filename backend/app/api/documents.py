@@ -1,15 +1,20 @@
 import os
+import re
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.document import Document, DocumentType
-from app.schemas.document import DocumentCreate, DocumentOut, DocumentUpdate
+from app.schemas.document import DocumentCreate, DocumentCreateFromUrl, DocumentOut, DocumentUpdate
+
+MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -95,6 +100,109 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
             shutil.rmtree(file_dir)
     db.delete(doc)
     db.commit()
+
+
+def _derive_filename_from_response(response: httpx.Response, url: str) -> str:
+    """Derive a filename from Content-Disposition header, URL path, or fallback."""
+    # Try Content-Disposition header first
+    cd = response.headers.get("content-disposition", "")
+    if cd:
+        match = re.search(r'filename[*]?=["\']?([^"\';]+)', cd)
+        if match:
+            name = match.group(1).strip()
+            if name:
+                return unquote(name)
+
+    # Try URL path
+    parsed = urlparse(url)
+    path = unquote(parsed.path).rstrip("/")
+    if path:
+        basename = path.split("/")[-1]
+        if basename and "." in basename:
+            return basename
+
+    return "download"
+
+
+async def _download_from_url(doc_id: int, url: str) -> tuple[str, int, str]:
+    """Download a file from a URL and return (file_path, file_size, mime_type)."""
+    doc_dir = UPLOAD_DIR / str(doc_id)
+    os.makedirs(doc_dir, exist_ok=True)
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
+
+                # Check content-length if available
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
+                    raise HTTPException(413, f"File too large (>{MAX_DOWNLOAD_SIZE // (1024*1024)}MB)")
+
+                filename = _derive_filename_from_response(response, url)
+                dest = doc_dir / filename
+                mime_type = response.headers.get("content-type", "application/octet-stream")
+                # Strip charset or params from content-type
+                if ";" in mime_type:
+                    mime_type = mime_type.split(";")[0].strip()
+
+                total = 0
+                with open(dest, "wb") as f:
+                    async for chunk in response.aiter_bytes(8192):
+                        total += len(chunk)
+                        if total > MAX_DOWNLOAD_SIZE:
+                            f.close()
+                            dest.unlink(missing_ok=True)
+                            raise HTTPException(413, f"File too large (>{MAX_DOWNLOAD_SIZE // (1024*1024)}MB)")
+                        f.write(chunk)
+
+        file_size = dest.stat().st_size
+        return str(dest), file_size, mime_type
+
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502, f"Remote server returned {exc.response.status_code}")
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout downloading from URL")
+    except httpx.RequestError as exc:
+        raise HTTPException(502, f"Failed to download from URL: {exc}")
+
+
+@router.post("/create-from-url", response_model=DocumentOut, status_code=201)
+async def create_document_from_url(data: DocumentCreateFromUrl, db: Session = Depends(get_db)):
+    """Create a document and download the file from a URL in one step."""
+    doc_name = data.name
+    if not doc_name:
+        # Derive name from URL
+        parsed = urlparse(data.url)
+        path = unquote(parsed.path).rstrip("/")
+        if path:
+            basename = path.split("/")[-1]
+            if basename:
+                doc_name = basename
+        if not doc_name:
+            doc_name = parsed.netloc or "Downloaded Document"
+
+    doc = Document(
+        name=doc_name,
+        doc_type=data.doc_type,
+        url=data.url,
+        asset_id=data.asset_id,
+        task_id=data.task_id,
+        repair_id=data.repair_id,
+        notes=data.notes,
+        expiry_date=data.expiry_date,
+    )
+    db.add(doc)
+    db.flush()
+
+    file_path, file_size, mime_type = await _download_from_url(doc.id, data.url)
+    doc.file_path = file_path
+    doc.file_size = file_size
+    doc.mime_type = mime_type
+
+    db.commit()
+    db.refresh(doc)
+    return document_to_out(doc)
 
 
 def _save_upload(doc_id: int, file: UploadFile) -> tuple[str, int, str]:
@@ -183,6 +291,31 @@ def upload_file_to_document(
             shutil.rmtree(old_dir)
 
     file_path, file_size, mime_type = _save_upload(doc.id, file)
+    doc.file_path = file_path
+    doc.file_size = file_size
+    doc.mime_type = mime_type
+
+    db.commit()
+    db.refresh(doc)
+    return document_to_out(doc)
+
+
+@router.post("/{document_id}/download-url", response_model=DocumentOut)
+async def download_document_url(document_id: int, db: Session = Depends(get_db)):
+    """Download the file from the document's URL and save it locally."""
+    doc = db.get(Document, document_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    if not doc.url:
+        raise HTTPException(400, "Document has no URL to download from")
+
+    # Clean up old file if replacing
+    if doc.file_path:
+        old_dir = UPLOAD_DIR / str(doc.id)
+        if old_dir.exists():
+            shutil.rmtree(old_dir)
+
+    file_path, file_size, mime_type = await _download_from_url(doc.id, doc.url)
     doc.file_path = file_path
     doc.file_size = file_size
     doc.mime_type = mime_type
