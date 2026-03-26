@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, ExternalLink, Shield, ShieldOff, ShieldAlert, MapPin } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, ExternalLink, Shield, ShieldOff, ShieldAlert, MapPin, Plus } from "lucide-react";
 import {
   fetchAsset, updateAsset, deleteAsset,
+  fetchDocuments, createDocument,
   CATEGORIES, CATEGORY_COLORS, LOCATIONS, PRIORITY_COLORS,
-  type AssetWithTasks,
+  DOC_TYPES, DOC_TYPE_COLORS, EXPIRY_STATUS_COLORS,
+  type AssetWithTasks, type Document,
 } from "../api";
 import { format } from "date-fns";
 
@@ -12,6 +14,11 @@ export default function AssetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetWithTasks | null>(null);
+  const [docs, setDocs] = useState<Document[]>([]);
+  const [showAddDoc, setShowAddDoc] = useState(false);
+  const [docForm, setDocForm] = useState({
+    name: "", doc_type: "manual", url: "", expiry_date: "", notes: "",
+  });
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "", category: "", manufacturer: "", model_number: "",
@@ -20,7 +27,12 @@ export default function AssetDetail() {
     notes: "", location: "",
   });
 
-  const load = () => { if (id) fetchAsset(Number(id)).then(setAsset); };
+  const load = () => {
+    if (id) {
+      fetchAsset(Number(id)).then(setAsset);
+      fetchDocuments({ asset_id: Number(id) }).then(setDocs);
+    }
+  };
   useEffect(load, [id]);
 
   function openEdit() {
@@ -59,6 +71,21 @@ export default function AssetDetail() {
       location: editForm.location || undefined,
     } as Partial<AssetWithTasks>);
     setShowEdit(false);
+    load();
+  }
+
+  async function handleAddDoc() {
+    if (!asset) return;
+    await createDocument({
+      name: docForm.name,
+      doc_type: docForm.doc_type,
+      url: docForm.url,
+      asset_id: asset.id,
+      expiry_date: docForm.expiry_date || undefined,
+      notes: docForm.notes || undefined,
+    });
+    setShowAddDoc(false);
+    setDocForm({ name: "", doc_type: "manual", url: "", expiry_date: "", notes: "" });
     load();
   }
 
@@ -214,6 +241,96 @@ export default function AssetDetail() {
           })
         )}
       </div>
+
+      {/* Linked Documents */}
+      <div className="card" style={{ marginTop: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <h3 style={{ margin: 0 }}>Documents</h3>
+          <button className="btn btn-primary" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => setShowAddDoc(true)}>
+            <Plus size={14} /> Add Document
+          </button>
+        </div>
+        {docs.length === 0 ? (
+          <div className="empty">No documents linked to this asset.</div>
+        ) : (
+          docs.map((doc) => {
+            const typeLabel = DOC_TYPES.find((t) => t.value === doc.doc_type)?.label ?? doc.doc_type;
+            const expiryLabel: Record<string, string> = { active: "Active", expiring_soon: "Expiring Soon", expired: "Expired", unknown: "No Expiry" };
+            return (
+              <div key={doc.id} className="task-item" style={{ cursor: "default" }}>
+                <div className="task-info">
+                  <span className="cat-dot" style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }} />
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="task-name"
+                    style={{ color: "var(--accent)", textDecoration: "none" }}
+                  >
+                    {doc.name} <ExternalLink size={12} style={{ verticalAlign: "middle" }} />
+                  </a>
+                </div>
+                <div className="task-meta">
+                  <span className="badge badge-category" style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }}>
+                    {typeLabel}
+                  </span>
+                  <span
+                    className="badge"
+                    style={{
+                      backgroundColor: EXPIRY_STATUS_COLORS[doc.expiry_status] + "22",
+                      color: EXPIRY_STATUS_COLORS[doc.expiry_status],
+                    }}
+                  >
+                    {expiryLabel[doc.expiry_status]}
+                  </span>
+                  {doc.expiry_date && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      {format(new Date(doc.expiry_date + "T00:00:00"), "MMM d, yyyy")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Add Document Modal */}
+      {showAddDoc && (
+        <div className="modal-overlay" onClick={() => setShowAddDoc(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 500, maxHeight: "90vh", overflowY: "auto" }}>
+            <h3>Add Document for {asset.name}</h3>
+            <div className="form-group">
+              <label>Name</label>
+              <input type="text" placeholder='e.g. "Carrier AC Manual"' value={docForm.name} onChange={(e) => setDocForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>URL</label>
+              <input type="url" placeholder="https://..." value={docForm.url} onChange={(e) => setDocForm((f) => ({ ...f, url: e.target.value }))} />
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>Document Type</label>
+                <select value={docForm.doc_type} onChange={(e) => setDocForm((f) => ({ ...f, doc_type: e.target.value }))}>
+                  {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Expiry Date</label>
+                <input type="date" value={docForm.expiry_date} onChange={(e) => setDocForm((f) => ({ ...f, expiry_date: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Notes</label>
+              <textarea value={docForm.notes} onChange={(e) => setDocForm((f) => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setShowAddDoc(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAddDoc} disabled={!docForm.name || !docForm.url}>Add Document</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEdit && (
         <div className="modal-overlay" onClick={() => setShowEdit(false)}>

@@ -11,12 +11,15 @@ from app.models.asset import Asset
 from app.models.contractor import Contractor
 from app.models.repair import Repair
 from app.models.notification import ChannelType, NotificationChannel
+from app.models.document import Document, DocumentType
 
 __all__ = [
     "Asset",
     "Category",
     "ChannelType",
     "Contractor",
+    "Document",
+    "DocumentType",
     "NotificationChannel",
     "Repair",
     "Frequency",

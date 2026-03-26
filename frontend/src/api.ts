@@ -521,6 +521,106 @@ export async function sendDigest(): Promise<{ status: string; results: { channel
   return res.json();
 }
 
+// === Documents ===
+
+export interface Document {
+  id: number;
+  name: string;
+  doc_type: string;
+  url: string;
+  asset_id: number | null;
+  task_id: number | null;
+  repair_id: number | null;
+  notes: string | null;
+  expiry_date: string | null;
+  created_at: string;
+  updated_at: string;
+  expiry_status: string;
+}
+
+export const DOC_TYPES = [
+  { value: "warranty", label: "Warranty" },
+  { value: "manual", label: "Manual" },
+  { value: "permit", label: "Permit" },
+  { value: "inspection", label: "Inspection" },
+  { value: "insurance", label: "Insurance" },
+  { value: "receipt", label: "Receipt" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const DOC_TYPE_COLORS: Record<string, string> = {
+  warranty: "#3b82f6",
+  manual: "#8b5cf6",
+  permit: "#f59e0b",
+  inspection: "#22c55e",
+  insurance: "#06b6d4",
+  receipt: "#6b7280",
+  other: "#a3a3a3",
+};
+
+export const EXPIRY_STATUS_COLORS: Record<string, string> = {
+  active: "#22c55e",
+  expiring_soon: "#f59e0b",
+  expired: "#ef4444",
+  unknown: "#6b7280",
+};
+
+export async function fetchDocuments(params?: {
+  doc_type?: string;
+  asset_id?: number;
+  task_id?: number;
+  repair_id?: number;
+}): Promise<Document[]> {
+  const query = new URLSearchParams();
+  if (params?.doc_type) query.set("doc_type", params.doc_type);
+  if (params?.asset_id) query.set("asset_id", String(params.asset_id));
+  if (params?.task_id) query.set("task_id", String(params.task_id));
+  if (params?.repair_id) query.set("repair_id", String(params.repair_id));
+  const res = await fetch(`${API_BASE}/documents?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
+export async function fetchDocument(id: number): Promise<Document> {
+  const res = await fetch(`${API_BASE}/documents/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch document");
+  return res.json();
+}
+
+export async function createDocument(data: {
+  name: string;
+  doc_type: string;
+  url: string;
+  asset_id?: number;
+  task_id?: number;
+  repair_id?: number;
+  notes?: string;
+  expiry_date?: string;
+}): Promise<Document> {
+  const res = await fetch(`${API_BASE}/documents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create document");
+  return res.json();
+}
+
+export async function updateDocument(id: number, data: Partial<Document>): Promise<Document> {
+  const res = await fetch(`${API_BASE}/documents/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update document");
+  return res.json();
+}
+
+export async function deleteDocument(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/documents/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete document");
+}
+
 export const CHANNEL_TYPES = [
   { value: "email", label: "Email" },
   { value: "webhook", label: "Webhook" },
