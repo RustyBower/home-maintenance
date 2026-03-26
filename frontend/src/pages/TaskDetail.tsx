@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle, Trash2, AlarmClockOff, Package, Pencil } from "lucide-react";
 import {
   fetchTask, completeTask, deleteTask, snoozeTask, updateTask, createSupply, deleteSupply, updateSupply,
+  fetchAssets, fetchContractors,
   CATEGORIES, FREQUENCIES, PRIORITIES, SEASONS, CATEGORY_COLORS, PRIORITY_COLORS, formatMinutes,
-  type TaskWithHistory, type Supply,
+  type TaskWithHistory, type Supply, type Asset, type Contractor,
 } from "../api";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -23,13 +24,18 @@ export default function TaskDetail() {
   const [supplyUrl, setSupplyUrl] = useState("");
   const [supplyQty, setSupplyQty] = useState("0");
   const [supplyPerUse, setSupplyPerUse] = useState("1");
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [contractorId, setContractorId] = useState("");
   const [editForm, setEditForm] = useState({
     name: "", description: "", category: "", frequency: "", season: "",
     priority: "", estimated_minutes: "", prefer_weekend: true, next_due: "",
+    asset_id: "",
   });
 
   const load = () => { if (id) fetchTask(Number(id)).then(setTask); };
   useEffect(load, [id]);
+  useEffect(() => { fetchAssets().then(setAssets); fetchContractors().then(setContractors); }, []);
 
   async function handleComplete() {
     if (!task) return;
@@ -38,9 +44,10 @@ export default function TaskDetail() {
       cost: cost ? parseFloat(cost) : undefined,
       duration_minutes: duration ? parseInt(duration) : undefined,
       photo_url: photoUrl || undefined,
+      contractor_id: contractorId ? parseInt(contractorId) : undefined,
     });
     setShowComplete(false);
-    setNotes(""); setCost(""); setDuration(""); setPhotoUrl("");
+    setNotes(""); setCost(""); setDuration(""); setPhotoUrl(""); setContractorId("");
     load();
   }
 
@@ -58,6 +65,7 @@ export default function TaskDetail() {
 
   function openEdit() {
     if (!task) return;
+    if (assets.length === 0) fetchAssets().then(setAssets);
     setEditForm({
       name: task.name,
       description: task.description || "",
@@ -68,6 +76,7 @@ export default function TaskDetail() {
       estimated_minutes: task.estimated_minutes?.toString() || "",
       prefer_weekend: task.prefer_weekend,
       next_due: task.next_due || "",
+      asset_id: task.asset_id?.toString() || "",
     });
     setShowEdit(true);
   }
@@ -84,6 +93,7 @@ export default function TaskDetail() {
       estimated_minutes: editForm.estimated_minutes ? parseInt(editForm.estimated_minutes) : undefined,
       prefer_weekend: editForm.prefer_weekend,
       next_due: editForm.next_due || undefined,
+      asset_id: editForm.asset_id ? parseInt(editForm.asset_id) : null,
     } as any);
     setShowEdit(false);
     load();
@@ -122,6 +132,7 @@ export default function TaskDetail() {
   const priorityLabel = PRIORITIES.find((p) => p.value === task.priority)?.label ?? task.priority;
   const seasonLabel = task.season ? SEASONS.find((s) => s.value === task.season)?.label : null;
   const totalCost = task.completions.reduce((sum, c) => sum + (c.cost || 0), 0);
+  const linkedAsset = task.asset_id ? assets.find((a) => a.id === task.asset_id) : null;
 
   return (
     <div>
@@ -161,6 +172,15 @@ export default function TaskDetail() {
           {task.estimated_minutes && <span className="badge badge-upcoming">{formatMinutes(task.estimated_minutes)}</span>}
           {task.prefer_weekend && <span className="badge badge-ok">Weekend</span>}
         </div>
+
+        {linkedAsset && (
+          <div style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>
+            <strong>Asset:</strong>{" "}
+            <Link to={`/assets/${linkedAsset.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+              {linkedAsset.name}
+            </Link>
+          </div>
+        )}
 
         {task.next_due && (
           <div style={{ fontSize: "0.875rem" }}>
@@ -249,6 +269,13 @@ export default function TaskDetail() {
               </div>
             </div>
             <div className="form-group">
+              <label>Contractor</label>
+              <select value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
+                <option value="">None (self)</option>
+                {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Photo URL</label>
               <input type="url" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://..." />
             </div>
@@ -310,6 +337,13 @@ export default function TaskDetail() {
             <div className="form-group">
               <label>Next Due Date</label>
               <input type="date" value={editForm.next_due} onChange={(e) => setEditForm((f) => ({ ...f, next_due: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Asset</label>
+              <select value={editForm.asset_id} onChange={(e) => setEditForm((f) => ({ ...f, asset_id: e.target.value }))}>
+                <option value="">None</option>
+                {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
             </div>
             <div className="form-group">
               <label className="checkbox">

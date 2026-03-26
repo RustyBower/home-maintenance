@@ -80,6 +80,10 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
+    )
+
     completions: Mapped[list["TaskCompletion"]] = relationship(
         back_populates="task",
         order_by="desc(TaskCompletion.completed_at)",
@@ -88,6 +92,7 @@ class Task(Base):
     supplies: Mapped[list["Supply"]] = relationship(
         back_populates="task", cascade="all, delete-orphan"
     )
+    asset: Mapped["Asset | None"] = relationship(back_populates="tasks")
 
 
 class TaskCompletion(Base):
@@ -103,7 +108,12 @@ class TaskCompletion(Base):
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    contractor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("contractors.id", ondelete="SET NULL"), nullable=True
+    )
+
     task: Mapped["Task"] = relationship(back_populates="completions")
+    contractor: Mapped["Contractor | None"] = relationship(back_populates="completions")
 
 
 class Supply(Base):

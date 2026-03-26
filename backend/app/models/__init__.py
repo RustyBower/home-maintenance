@@ -7,9 +7,15 @@ from app.models.task import (
     Task,
     TaskCompletion,
 )
+from app.models.asset import Asset
+from app.models.contractor import Contractor
+from app.models.repair import Repair
 
 __all__ = [
+    "Asset",
     "Category",
+    "Contractor",
+    "Repair",
     "Frequency",
     "Priority",
     "Season",

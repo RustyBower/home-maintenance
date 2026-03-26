@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings } from "lucide-react";
+import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import TaskList from "./pages/TaskList";
 import TaskDetail from "./pages/TaskDetail";
@@ -8,6 +8,12 @@ import WeekendPlanner from "./pages/WeekendPlanner";
 import Timeline from "./pages/Timeline";
 import Costs from "./pages/Costs";
 import Supplies from "./pages/Supplies";
+import Assets from "./pages/Assets";
+import AssetDetail from "./pages/AssetDetail";
+import Contractors from "./pages/Contractors";
+import ContractorDetail from "./pages/ContractorDetail";
+import Repairs from "./pages/Repairs";
+import RepairDetail from "./pages/RepairDetail";
 import Setup from "./pages/Setup";
 import "./App.css";
 
@@ -35,6 +41,15 @@ function App() {
           <NavLink to="/costs">
             <DollarSign size={18} /> Costs
           </NavLink>
+          <NavLink to="/assets">
+            <Box size={18} /> Assets
+          </NavLink>
+          <NavLink to="/contractors">
+            <Users size={18} /> Contractors
+          </NavLink>
+          <NavLink to="/repairs">
+            <AlertCircle size={18} /> Repairs
+          </NavLink>
           <NavLink to="/supplies">
             <Package size={18} /> Supplies
           </NavLink>
@@ -54,6 +69,12 @@ function App() {
             <Route path="/weekend" element={<WeekendPlanner />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/costs" element={<Costs />} />
+            <Route path="/assets" element={<Assets />} />
+            <Route path="/assets/:id" element={<AssetDetail />} />
+            <Route path="/contractors" element={<Contractors />} />
+            <Route path="/contractors/:id" element={<ContractorDetail />} />
+            <Route path="/repairs" element={<Repairs />} />
+            <Route path="/repairs/:id" element={<RepairDetail />} />
             <Route path="/supplies" element={<Supplies />} />
             <Route path="/setup" element={<Setup />} />
           </Routes>

@@ -12,6 +12,7 @@ export interface Task {
   prefer_weekend: boolean;
   custom_interval_days: number | null;
   next_due: string | null;
+  asset_id: number | null;
   created_at: string;
   updated_at: string;
   last_completed: string | null;
@@ -25,6 +26,7 @@ export interface TaskCompletion {
   cost: number | null;
   photo_url: string | null;
   duration_minutes: number | null;
+  contractor_id: number | null;
 }
 
 export interface Supply {
@@ -105,7 +107,7 @@ export async function fetchTask(id: number): Promise<TaskWithHistory> {
 
 export async function completeTask(
   id: number,
-  data: { notes?: string; cost?: number; photo_url?: string; duration_minutes?: number }
+  data: { notes?: string; cost?: number; photo_url?: string; duration_minutes?: number; contractor_id?: number }
 ): Promise<Task> {
   const res = await fetch(`${API_BASE}/tasks/${id}/complete`, {
     method: "POST",
@@ -214,6 +216,58 @@ export async function deleteSupply(id: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete supply");
 }
 
+export async function fetchAssets(params?: { category?: string }): Promise<Asset[]> {
+  const query = new URLSearchParams();
+  if (params?.category) query.set("category", params.category);
+  const res = await fetch(`${API_BASE}/assets?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch assets");
+  return res.json();
+}
+
+export async function fetchAsset(id: number): Promise<AssetWithTasks> {
+  const res = await fetch(`${API_BASE}/assets/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch asset");
+  return res.json();
+}
+
+export async function createAsset(data: {
+  name: string;
+  category: string;
+  manufacturer?: string;
+  model_number?: string;
+  serial_number?: string;
+  install_date?: string;
+  warranty_expires?: string;
+  expected_lifespan_years?: number;
+  purchase_price?: number;
+  manual_url?: string;
+  notes?: string;
+  location?: string;
+}): Promise<Asset> {
+  const res = await fetch(`${API_BASE}/assets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create asset");
+  return res.json();
+}
+
+export async function updateAsset(id: number, data: Partial<Asset>): Promise<Asset> {
+  const res = await fetch(`${API_BASE}/assets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update asset");
+  return res.json();
+}
+
+export async function deleteAsset(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/assets/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete asset");
+}
+
 export const CATEGORIES = [
   { value: "hvac", label: "HVAC" },
   { value: "plumbing", label: "Plumbing" },
@@ -251,6 +305,47 @@ export const SEASONS = [
   { value: "winter", label: "Winter" },
 ] as const;
 
+export interface Asset {
+  id: number;
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  model_number: string | null;
+  serial_number: string | null;
+  install_date: string | null;
+  warranty_expires: string | null;
+  expected_lifespan_years: number | null;
+  purchase_price: number | null;
+  manual_url: string | null;
+  notes: string | null;
+  location: string | null;
+  created_at: string;
+  updated_at: string;
+  age_years: number | null;
+  warranty_status: string;
+  replacement_estimate: string | null;
+}
+
+export interface AssetWithTasks extends Asset {
+  tasks: Task[];
+}
+
+export const LOCATIONS = [
+  "Basement",
+  "Kitchen",
+  "Garage",
+  "Attic",
+  "Bathroom",
+  "Living Room",
+  "Laundry Room",
+  "Utility Room",
+  "Master Bedroom",
+  "Exterior",
+  "Backyard",
+  "Roof",
+  "Crawlspace",
+] as const;
+
 export const CATEGORY_COLORS: Record<string, string> = {
   hvac: "#3b82f6",
   plumbing: "#06b6d4",
@@ -264,6 +359,83 @@ export const CATEGORY_COLORS: Record<string, string> = {
   pest: "#f97316",
   other: "#a3a3a3",
 };
+
+export interface Contractor {
+  id: number;
+  name: string;
+  specialty: string;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  notes: string | null;
+  rating: number | null;
+  created_at: string;
+  updated_at: string;
+  total_spent: number;
+  jobs_completed: number;
+}
+
+export interface CompletionHistoryItem {
+  id: number;
+  task_id: number;
+  task_name: string;
+  completed_at: string;
+  cost: number | null;
+  notes: string | null;
+}
+
+export interface ContractorWithHistory extends Contractor {
+  recent_work: CompletionHistoryItem[];
+}
+
+export async function fetchContractors(params?: { specialty?: string }): Promise<Contractor[]> {
+  const query = new URLSearchParams();
+  if (params?.specialty) query.set("specialty", params.specialty);
+  const res = await fetch(`${API_BASE}/contractors?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch contractors");
+  return res.json();
+}
+
+export async function fetchContractor(id: number): Promise<ContractorWithHistory> {
+  const res = await fetch(`${API_BASE}/contractors/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch contractor");
+  return res.json();
+}
+
+export async function createContractor(data: {
+  name: string;
+  specialty: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  notes?: string;
+  rating?: number;
+}): Promise<Contractor> {
+  const res = await fetch(`${API_BASE}/contractors`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create contractor");
+  return res.json();
+}
+
+export async function updateContractor(id: number, data: Partial<Contractor>): Promise<Contractor> {
+  const res = await fetch(`${API_BASE}/contractors/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update contractor");
+  return res.json();
+}
+
+export async function deleteContractor(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/contractors/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete contractor");
+}
 
 export const PRIORITY_COLORS: Record<string, string> = {
   p1: "#ef4444",

@@ -13,6 +13,7 @@ class TaskCompletionOut(BaseModel):
     cost: float | None
     photo_url: str | None
     duration_minutes: int | None
+    contractor_id: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -42,6 +43,7 @@ class TaskOut(BaseModel):
     prefer_weekend: bool
     custom_interval_days: int | None
     next_due: date | None
+    asset_id: int | None = None
     created_at: datetime
     updated_at: datetime
     last_completed: datetime | None = None
@@ -60,6 +62,7 @@ class TaskCreate(BaseModel):
     prefer_weekend: bool = True
     custom_interval_days: int | None = None
     next_due: date | None = None
+    asset_id: int | None = None
 
 
 class TaskUpdate(BaseModel):
@@ -73,6 +76,7 @@ class TaskUpdate(BaseModel):
     prefer_weekend: bool | None = None
     custom_interval_days: int | None = None
     next_due: date | None = None
+    asset_id: int | None = None
 
 
 class CompleteTask(BaseModel):
@@ -80,6 +84,7 @@ class CompleteTask(BaseModel):
     cost: float | None = None
     photo_url: str | None = None
     duration_minutes: int | None = None
+    contractor_id: int | None = None
 
 
 class SnoozeTask(BaseModel):
