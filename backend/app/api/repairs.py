@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.repair import Repair, RepairStatus, Severity
 from app.models.task import Category
 from app.schemas.repair import RepairCreate, RepairOut, RepairUpdate
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/api/repairs", tags=["repairs"])
 
@@ -66,6 +67,7 @@ def create_repair(data: RepairCreate, db: Session = Depends(get_db)):
     db.add(repair)
     db.commit()
     db.refresh(repair)
+    log_activity(db, "created", "repair", repair.id, repair.title, f"Status: {repair.status.value}, Severity: {repair.severity.value}")
     return RepairOut.model_validate(repair, from_attributes=True)
 
 
@@ -74,10 +76,19 @@ def update_repair(repair_id: int, data: RepairUpdate, db: Session = Depends(get_
     repair = db.get(Repair, repair_id)
     if not repair:
         raise HTTPException(404, "Repair not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    old_status = repair.status.value
+    updates = data.model_dump(exclude_unset=True)
+    for field, value in updates.items():
         setattr(repair, field, value)
     db.commit()
     db.refresh(repair)
+    details_parts = []
+    if "status" in updates and updates["status"].value != old_status:
+        details_parts.append(f"Status changed to {repair.status.value}")
+    if "cost" in updates and updates["cost"] is not None:
+        details_parts.append(f"Cost: ${float(updates['cost']):.2f}")
+    action = "status_changed" if "status" in updates and updates["status"].value != old_status else "updated"
+    log_activity(db, action, "repair", repair.id, repair.title, "; ".join(details_parts) or None)
     return RepairOut.model_validate(repair, from_attributes=True)
 
 
@@ -86,5 +97,7 @@ def delete_repair(repair_id: int, db: Session = Depends(get_db)):
     repair = db.get(Repair, repair_id)
     if not repair:
         raise HTTPException(404, "Repair not found")
+    repair_title = repair.title
     db.delete(repair)
     db.commit()
+    log_activity(db, "deleted", "repair", repair_id, repair_title)

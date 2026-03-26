@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle, Bell, FileText, Download } from "lucide-react";
+import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle, Bell, FileText, Download, ClipboardList, Receipt, ClipboardCheck } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import TaskList from "./pages/TaskList";
 import TaskDetail from "./pages/TaskDetail";
@@ -18,6 +18,9 @@ import Setup from "./pages/Setup";
 import Documents from "./pages/Documents";
 import Notifications from "./pages/Notifications";
 import ExportImport from "./pages/ExportImport";
+import Activity from "./pages/Activity";
+import Expenses from "./pages/Expenses";
+import Checklists from "./pages/Checklists";
 import "./App.css";
 
 function App() {
@@ -56,6 +59,15 @@ function App() {
           <NavLink to="/supplies">
             <Package size={18} /> Supplies
           </NavLink>
+          <NavLink to="/expenses">
+            <Receipt size={18} /> Expenses
+          </NavLink>
+          <NavLink to="/checklists">
+            <ClipboardCheck size={18} /> Checklists
+          </NavLink>
+          <NavLink to="/activity">
+            <ClipboardList size={18} /> Activity
+          </NavLink>
           <NavLink to="/documents">
             <FileText size={18} /> Documents
           </NavLink>
@@ -88,6 +100,9 @@ function App() {
             <Route path="/repairs" element={<Repairs />} />
             <Route path="/repairs/:id" element={<RepairDetail />} />
             <Route path="/supplies" element={<Supplies />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/checklists" element={<Checklists />} />
+            <Route path="/activity" element={<Activity />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/export" element={<ExportImport />} />

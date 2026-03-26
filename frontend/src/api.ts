@@ -764,6 +764,30 @@ export const PRIORITY_COLORS: Record<string, string> = {
   p3: "#6b7280",
 };
 
+// === Activity ===
+
+export interface Activity {
+  id: number;
+  action: "created" | "updated" | "completed" | "snoozed" | "deleted" | "status_changed";
+  entity_type: "task" | "asset" | "repair" | "contractor" | "document" | "supply";
+  entity_id: number;
+  entity_name: string;
+  details: string | null;
+  created_at: string;
+}
+
+export async function fetchActivity(params?: {
+  entity_type?: string;
+  limit?: number;
+}): Promise<Activity[]> {
+  const query = new URLSearchParams();
+  if (params?.entity_type) query.set("entity_type", params.entity_type);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const res = await fetch(`${API_BASE}/activity?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch activity");
+  return res.json();
+}
+
 export function formatMinutes(mins: number): string {
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);

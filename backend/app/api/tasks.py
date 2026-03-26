@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.task import Category, Frequency, Priority, Season, Supply, Task, TaskCompletion
+from app.services.activity import log_activity
 from app.schemas.task import (
     CompleteTask,
     SnoozeTask,
@@ -277,6 +278,7 @@ def create_task(data: TaskCreate, db: Session = Depends(get_db)):
     db.add(task)
     db.commit()
     db.refresh(task)
+    log_activity(db, "created", "task", task.id, task.name)
     return task_to_out(task)
 
 
@@ -300,6 +302,7 @@ def update_task(task_id: int, data: TaskUpdate, db: Session = Depends(get_db)):
         setattr(task, field, value)
     db.commit()
     db.refresh(task)
+    log_activity(db, "updated", "task", task.id, task.name)
     return task_to_out(task)
 
 
@@ -308,8 +311,10 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(404, "Task not found")
+    task_name = task.name
     db.delete(task)
     db.commit()
+    log_activity(db, "deleted", "task", task_id, task_name)
 
 
 @router.post("/{task_id}/complete", response_model=TaskOut)
@@ -328,6 +333,12 @@ def complete_task(task_id: int, data: CompleteTask, db: Session = Depends(get_db
     task.next_due = compute_next_due(task)
     db.commit()
     db.refresh(task)
+    details_parts = []
+    if data.cost:
+        details_parts.append(f"Cost: ${data.cost:.2f}")
+    if data.duration_minutes:
+        details_parts.append(f"{data.duration_minutes}min")
+    log_activity(db, "completed", "task", task.id, task.name, "; ".join(details_parts) or None)
     return task_to_out(task)
 
 
@@ -343,6 +354,7 @@ def snooze_task(task_id: int, data: SnoozeTask, db: Session = Depends(get_db)):
     task.next_due = new_date
     db.commit()
     db.refresh(task)
+    log_activity(db, "snoozed", "task", task.id, task.name, f"Snoozed by {data.days} days")
     return task_to_out(task)
 
 

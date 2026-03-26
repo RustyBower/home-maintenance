@@ -10,6 +10,7 @@ from app.models.task import Category
 from app.schemas.asset import AssetCreate, AssetOut, AssetUpdate, AssetWithTasks
 from app.schemas.task import TaskOut
 from app.api.tasks import task_to_out
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
@@ -79,6 +80,7 @@ def create_asset(data: AssetCreate, db: Session = Depends(get_db)):
     db.add(asset)
     db.commit()
     db.refresh(asset)
+    log_activity(db, "created", "asset", asset.id, asset.name)
     return asset_to_out(asset)
 
 
@@ -91,6 +93,7 @@ def update_asset(asset_id: int, data: AssetUpdate, db: Session = Depends(get_db)
         setattr(asset, field, value)
     db.commit()
     db.refresh(asset)
+    log_activity(db, "updated", "asset", asset.id, asset.name)
     return asset_to_out(asset)
 
 
@@ -99,5 +102,7 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     asset = db.get(Asset, asset_id)
     if not asset:
         raise HTTPException(404, "Asset not found")
+    asset_name = asset.name
     db.delete(asset)
     db.commit()
+    log_activity(db, "deleted", "asset", asset_id, asset_name)

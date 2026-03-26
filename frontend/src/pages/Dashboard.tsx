@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle, AlertTriangle, Clock, Calendar, Timer } from "lucide-react";
 import {
-  fetchDashboard, completeTask, snoozeTask, CATEGORY_COLORS, CATEGORIES, PRIORITY_COLORS, formatMinutes,
-  type Dashboard as DashboardData, type Task,
+  fetchDashboard, completeTask, snoozeTask, fetchActivity, CATEGORY_COLORS, CATEGORIES, PRIORITY_COLORS, formatMinutes,
+  type Dashboard as DashboardData, type Task, type Activity as ActivityItem,
 } from "../api";
+import { ActivityEntry } from "./Activity";
 import { format, formatDistanceToNow } from "date-fns";
 
 function categoryLabel(val: string) {
@@ -80,8 +81,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [completing, setCompleting] = useState<Task | null>(null);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
-  const load = () => fetchDashboard().then(setData);
+  const load = () => {
+    fetchDashboard().then(setData);
+    fetchActivity({ limit: 10 }).then(setRecentActivity);
+  };
   useEffect(() => {
     fetch("/api/setup/status").then((r) => r.json()).then((s) => {
       if (!s.has_tasks) navigate("/setup", { replace: true });
@@ -198,6 +203,20 @@ export default function Dashboard() {
                 {categoryLabel(cat)}: {count}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {recentActivity.length > 0 && (
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <h3>Recent Activity</h3>
+          {recentActivity.map((item) => (
+            <ActivityEntry key={item.id} item={item} compact />
+          ))}
+          <div style={{ textAlign: "center", marginTop: "0.75rem" }}>
+            <Link to="/activity" className="btn btn-ghost" style={{ fontSize: "0.8125rem" }}>
+              View all activity
+            </Link>
           </div>
         </div>
       )}
