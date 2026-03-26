@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, ExternalLink, Shield, ShieldOff, ShieldAlert, MapPin, Plus } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, ExternalLink, Shield, ShieldOff, ShieldAlert, MapPin, Plus, Upload, Paperclip, Download } from "lucide-react";
 import {
   fetchAsset, updateAsset, deleteAsset,
-  fetchDocuments, createDocument,
+  fetchDocuments, createDocument, uploadDocument, uploadDocumentFile, formatFileSize,
   CATEGORIES, CATEGORY_COLORS, LOCATIONS, PRIORITY_COLORS,
   DOC_TYPES, DOC_TYPE_COLORS, EXPIRY_STATUS_COLORS,
   type AssetWithTasks, type Document,
@@ -19,6 +19,11 @@ export default function AssetDetail() {
   const [docForm, setDocForm] = useState({
     name: "", doc_type: "manual", url: "", expiry_date: "", notes: "",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const [attachingDocId, setAttachingDocId] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "", category: "", manufacturer: "", model_number: "",
@@ -74,18 +79,41 @@ export default function AssetDetail() {
     load();
   }
 
+  function handleFileSelect(file: File) {
+    setSelectedFile(file);
+    if (!docForm.name) {
+      setDocForm((f) => ({ ...f, name: file.name }));
+    }
+  }
+
   async function handleAddDoc() {
     if (!asset) return;
-    await createDocument({
-      name: docForm.name,
-      doc_type: docForm.doc_type,
-      url: docForm.url,
-      asset_id: asset.id,
-      expiry_date: docForm.expiry_date || undefined,
-      notes: docForm.notes || undefined,
-    });
+    if (selectedFile) {
+      await uploadDocument(selectedFile, {
+        name: docForm.name || undefined,
+        doc_type: docForm.doc_type,
+        asset_id: asset.id,
+        expiry_date: docForm.expiry_date || undefined,
+        notes: docForm.notes || undefined,
+      });
+    } else {
+      await createDocument({
+        name: docForm.name,
+        doc_type: docForm.doc_type,
+        url: docForm.url || undefined,
+        asset_id: asset.id,
+        expiry_date: docForm.expiry_date || undefined,
+        notes: docForm.notes || undefined,
+      });
+    }
     setShowAddDoc(false);
     setDocForm({ name: "", doc_type: "manual", url: "", expiry_date: "", notes: "" });
+    setSelectedFile(null);
+    load();
+  }
+
+  async function handleAttachFile(docId: number, file: File) {
+    await uploadDocumentFile(docId, file);
     load();
   }
 
@@ -98,6 +126,7 @@ export default function AssetDetail() {
   if (!asset) return <div className="empty">Loading...</div>;
 
   const catLabel = CATEGORIES.find((c) => c.value === asset.category)?.label ?? asset.category;
+  const canSaveDoc = docForm.name && (docForm.url || selectedFile);
 
   function warrantyBadge(status: string) {
     if (status === "active") return <span className="badge badge-ok"><Shield size={12} /> Warranty Active</span>;
@@ -246,34 +275,64 @@ export default function AssetDetail() {
       <div className="card" style={{ marginTop: "1rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ margin: 0 }}>Documents</h3>
-          <button className="btn btn-primary" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => setShowAddDoc(true)}>
+          <button className="btn btn-primary" style={{ padding: "0.375rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => { setShowAddDoc(true); setSelectedFile(null); }}>
             <Plus size={14} /> Add Document
           </button>
         </div>
+
+        {/* Hidden input for attaching files to existing docs */}
+        <input
+          ref={attachInputRef}
+          type="file"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file && attachingDocId !== null) {
+              handleAttachFile(attachingDocId, file);
+            }
+            e.target.value = "";
+            setAttachingDocId(null);
+          }}
+        />
+
         {docs.length === 0 ? (
           <div className="empty">No documents linked to this asset.</div>
         ) : (
           docs.map((doc) => {
             const typeLabel = DOC_TYPES.find((t) => t.value === doc.doc_type)?.label ?? doc.doc_type;
             const expiryLabel: Record<string, string> = { active: "Active", expiring_soon: "Expiring Soon", expired: "Expired", unknown: "No Expiry" };
+            const docLink = doc.file_url || doc.url;
+            const isFile = !!doc.file_url;
             return (
               <div key={doc.id} className="task-item" style={{ cursor: "default" }}>
                 <div className="task-info">
                   <span className="cat-dot" style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }} />
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="task-name"
-                    style={{ color: "var(--accent)", textDecoration: "none" }}
-                  >
-                    {doc.name} <ExternalLink size={12} style={{ verticalAlign: "middle" }} />
-                  </a>
+                  {docLink ? (
+                    <a
+                      href={docLink}
+                      target={isFile ? undefined : "_blank"}
+                      rel="noreferrer"
+                      className="task-name"
+                      style={{ color: "var(--accent)", textDecoration: "none" }}
+                    >
+                      {doc.name} {isFile ? <Download size={12} style={{ verticalAlign: "middle" }} /> : <ExternalLink size={12} style={{ verticalAlign: "middle" }} />}
+                    </a>
+                  ) : (
+                    <span className="task-name">{doc.name}</span>
+                  )}
                 </div>
                 <div className="task-meta">
                   <span className="badge badge-category" style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }}>
                     {typeLabel}
                   </span>
+                  {doc.file_size != null && (
+                    <span
+                      className="badge"
+                      style={{ background: "rgba(59,130,246,0.12)", color: "#3b82f6" }}
+                    >
+                      <Paperclip size={10} /> {formatFileSize(doc.file_size)}
+                    </span>
+                  )}
                   <span
                     className="badge"
                     style={{
@@ -287,6 +346,20 @@ export default function AssetDetail() {
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       {format(new Date(doc.expiry_date + "T00:00:00"), "MMM d, yyyy")}
                     </span>
+                  )}
+                  {!doc.file_path && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.25rem 0.5rem" }}
+                      title="Attach file"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAttachingDocId(doc.id);
+                        attachInputRef.current?.click();
+                      }}
+                    >
+                      <Upload size={14} />
+                    </button>
                   )}
                 </div>
               </div>
@@ -304,10 +377,74 @@ export default function AssetDetail() {
               <label>Name</label>
               <input type="text" placeholder='e.g. "Carrier AC Manual"' value={docForm.name} onChange={(e) => setDocForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
+
+            {/* File Upload */}
             <div className="form-group">
-              <label>URL</label>
-              <input type="url" placeholder="https://..." value={docForm.url} onChange={(e) => setDocForm((f) => ({ ...f, url: e.target.value }))} />
+              <label>Upload File</label>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleFileSelect(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 8,
+                  padding: "1rem",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: dragOver ? "rgba(59,130,246,0.06)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                    e.target.value = "";
+                  }}
+                />
+                {selectedFile ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                    <Paperclip size={16} style={{ color: "var(--accent)" }} />
+                    <span style={{ color: "var(--text)" }}>{selectedFile.name}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                      ({formatFileSize(selectedFile.size)})
+                    </span>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.125rem 0.375rem", fontSize: "0.75rem" }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                    <Upload size={20} style={{ marginBottom: "0.25rem", opacity: 0.5 }} />
+                    <div>Drop a file here or click to browse</div>
+                  </div>
+                )}
+              </div>
             </div>
+
+            <div className="form-group">
+              <label>URL {selectedFile ? "(optional)" : ""}</label>
+              <input type="url" placeholder="https://..." value={docForm.url} onChange={(e) => setDocForm((f) => ({ ...f, url: e.target.value }))} />
+              {!selectedFile && !docForm.url && (
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  Provide a URL, upload a file, or both
+                </div>
+              )}
+            </div>
+
             <div className="grid-2">
               <div className="form-group">
                 <label>Document Type</label>
@@ -326,7 +463,7 @@ export default function AssetDetail() {
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowAddDoc(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAddDoc} disabled={!docForm.name || !docForm.url}>Add Document</button>
+              <button className="btn btn-primary" onClick={handleAddDoc} disabled={!canSaveDoc}>Add Document</button>
             </div>
           </div>
         </div>

@@ -32,7 +32,10 @@ class Document(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     doc_type: Mapped[DocumentType] = mapped_column(Enum(DocumentType), nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     asset_id: Mapped[int | None] = mapped_column(
         ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
     )

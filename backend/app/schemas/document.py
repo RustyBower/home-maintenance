@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.models.document import DocumentType
 
@@ -9,7 +9,10 @@ class DocumentOut(BaseModel):
     id: int
     name: str
     doc_type: DocumentType
-    url: str
+    url: str | None
+    file_path: str | None
+    file_size: int | None
+    mime_type: str | None
     asset_id: int | None
     task_id: int | None
     repair_id: int | None
@@ -21,11 +24,18 @@ class DocumentOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @computed_field
+    @property
+    def file_url(self) -> str | None:
+        if self.file_path:
+            return f"/api/documents/{self.id}/file"
+        return None
+
 
 class DocumentCreate(BaseModel):
     name: str
     doc_type: DocumentType
-    url: str
+    url: str | None = None
     asset_id: int | None = None
     task_id: int | None = None
     repair_id: int | None = None

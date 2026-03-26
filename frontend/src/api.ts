@@ -527,7 +527,11 @@ export interface Document {
   id: number;
   name: string;
   doc_type: string;
-  url: string;
+  url: string | null;
+  file_path: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  file_url: string | null;
   asset_id: number | null;
   task_id: number | null;
   repair_id: number | null;
@@ -590,7 +594,7 @@ export async function fetchDocument(id: number): Promise<Document> {
 export async function createDocument(data: {
   name: string;
   doc_type: string;
-  url: string;
+  url?: string;
   asset_id?: number;
   task_id?: number;
   repair_id?: number;
@@ -619,6 +623,53 @@ export async function updateDocument(id: number, data: Partial<Document>): Promi
 export async function deleteDocument(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/documents/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete document");
+}
+
+export async function uploadDocument(
+  file: File,
+  metadata: {
+    name?: string;
+    doc_type?: string;
+    asset_id?: number;
+    task_id?: number;
+    repair_id?: number;
+    notes?: string;
+    expiry_date?: string;
+  }
+): Promise<Document> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (metadata.name) formData.append("name", metadata.name);
+  if (metadata.doc_type) formData.append("doc_type", metadata.doc_type);
+  if (metadata.asset_id) formData.append("asset_id", String(metadata.asset_id));
+  if (metadata.task_id) formData.append("task_id", String(metadata.task_id));
+  if (metadata.repair_id) formData.append("repair_id", String(metadata.repair_id));
+  if (metadata.notes) formData.append("notes", metadata.notes);
+  if (metadata.expiry_date) formData.append("expiry_date", metadata.expiry_date);
+  const res = await fetch(`${API_BASE}/documents/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to upload document");
+  return res.json();
+}
+
+export async function uploadDocumentFile(id: number, file: File): Promise<Document> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/documents/${id}/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to upload file");
+  return res.json();
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 // === Export / Import ===

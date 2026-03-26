@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Plus, FileText, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Plus, FileText, ExternalLink, Pencil, Trash2, Upload, Paperclip, Download } from "lucide-react";
 import {
   fetchDocuments, createDocument, updateDocument, deleteDocument,
+  uploadDocument, uploadDocumentFile, formatFileSize,
   fetchAssets, fetchTasks,
   DOC_TYPES, DOC_TYPE_COLORS, EXPIRY_STATUS_COLORS,
   type Document, type Asset, type Task,
@@ -55,6 +56,11 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const [attachingDocId, setAttachingDocId] = useState<number | null>(null);
 
   const load = () => {
     fetchDocuments({ doc_type: filterType || undefined }).then(setDocs);
@@ -70,6 +76,7 @@ export default function Documents() {
   function openCreate() {
     setEditingId(null);
     setForm({ ...emptyForm });
+    setSelectedFile(null);
     setShowModal(true);
   }
 
@@ -78,30 +85,63 @@ export default function Documents() {
     setForm({
       name: doc.name,
       doc_type: doc.doc_type,
-      url: doc.url,
+      url: doc.url || "",
       asset_id: doc.asset_id?.toString() || "",
       task_id: doc.task_id?.toString() || "",
       repair_id: doc.repair_id?.toString() || "",
       expiry_date: doc.expiry_date || "",
       notes: doc.notes || "",
     });
+    setSelectedFile(null);
     setShowModal(true);
   }
 
+  function handleFileSelect(file: File) {
+    setSelectedFile(file);
+    if (!form.name) {
+      setForm((f) => ({ ...f, name: file.name }));
+    }
+  }
+
   async function handleSave() {
-    const payload: Record<string, unknown> = {
-      name: form.name,
-      doc_type: form.doc_type,
-      url: form.url,
-      asset_id: form.asset_id ? parseInt(form.asset_id) : null,
-      task_id: form.task_id ? parseInt(form.task_id) : null,
-      repair_id: form.repair_id ? parseInt(form.repair_id) : null,
-      expiry_date: form.expiry_date || null,
-      notes: form.notes || null,
-    };
-    if (editingId) {
+    if (!editingId && selectedFile) {
+      // Upload with file
+      await uploadDocument(selectedFile, {
+        name: form.name || undefined,
+        doc_type: form.doc_type,
+        asset_id: form.asset_id ? parseInt(form.asset_id) : undefined,
+        task_id: form.task_id ? parseInt(form.task_id) : undefined,
+        repair_id: form.repair_id ? parseInt(form.repair_id) : undefined,
+        expiry_date: form.expiry_date || undefined,
+        notes: form.notes || undefined,
+      });
+    } else if (editingId) {
+      const payload: Record<string, unknown> = {
+        name: form.name,
+        doc_type: form.doc_type,
+        url: form.url || null,
+        asset_id: form.asset_id ? parseInt(form.asset_id) : null,
+        task_id: form.task_id ? parseInt(form.task_id) : null,
+        repair_id: form.repair_id ? parseInt(form.repair_id) : null,
+        expiry_date: form.expiry_date || null,
+        notes: form.notes || null,
+      };
       await updateDocument(editingId, payload as Partial<Document>);
+      if (selectedFile) {
+        await uploadDocumentFile(editingId, selectedFile);
+      }
     } else {
+      // URL-only create
+      const payload: Record<string, unknown> = {
+        name: form.name,
+        doc_type: form.doc_type,
+        url: form.url || null,
+        asset_id: form.asset_id ? parseInt(form.asset_id) : null,
+        task_id: form.task_id ? parseInt(form.task_id) : null,
+        repair_id: form.repair_id ? parseInt(form.repair_id) : null,
+        expiry_date: form.expiry_date || null,
+        notes: form.notes || null,
+      };
       await createDocument(payload as Parameters<typeof createDocument>[0]);
     }
     setShowModal(false);
@@ -111,6 +151,11 @@ export default function Documents() {
   async function handleDelete(id: number) {
     if (!confirm("Delete this document?")) return;
     await deleteDocument(id);
+    load();
+  }
+
+  async function handleAttachFile(docId: number, file: File) {
+    await uploadDocumentFile(docId, file);
     load();
   }
 
@@ -139,6 +184,8 @@ export default function Documents() {
     return a.name.localeCompare(b.name);
   });
 
+  const canSave = form.name && (form.url || selectedFile);
+
   return (
     <div>
       <div className="page-header">
@@ -157,6 +204,21 @@ export default function Documents() {
         </select>
       </div>
 
+      {/* Hidden input for attaching files to existing docs */}
+      <input
+        ref={attachInputRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && attachingDocId !== null) {
+            handleAttachFile(attachingDocId, file);
+          }
+          e.target.value = "";
+          setAttachingDocId(null);
+        }}
+      />
+
       <div className="card">
         {sorted.length === 0 ? (
           <div className="empty">
@@ -167,6 +229,8 @@ export default function Documents() {
           sorted.map((doc) => {
             const typeLabel = DOC_TYPES.find((t) => t.value === doc.doc_type)?.label ?? doc.doc_type;
             const linked = linkedEntity(doc);
+            const docLink = doc.file_url || doc.url;
+            const isFile = !!doc.file_url;
             return (
               <div key={doc.id} className="task-item" style={{ cursor: "default" }}>
                 <div className="task-info">
@@ -174,16 +238,20 @@ export default function Documents() {
                     className="cat-dot"
                     style={{ backgroundColor: DOC_TYPE_COLORS[doc.doc_type] }}
                   />
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="task-name"
-                    style={{ color: "var(--accent)", textDecoration: "none" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {doc.name} <ExternalLink size={12} style={{ verticalAlign: "middle" }} />
-                  </a>
+                  {docLink ? (
+                    <a
+                      href={docLink}
+                      target={isFile ? undefined : "_blank"}
+                      rel="noreferrer"
+                      className="task-name"
+                      style={{ color: "var(--accent)", textDecoration: "none" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {doc.name} {isFile ? <Download size={12} style={{ verticalAlign: "middle" }} /> : <ExternalLink size={12} style={{ verticalAlign: "middle" }} />}
+                    </a>
+                  ) : (
+                    <span className="task-name">{doc.name}</span>
+                  )}
                 </div>
                 <div className="task-meta">
                   <span
@@ -192,6 +260,14 @@ export default function Documents() {
                   >
                     {typeLabel}
                   </span>
+                  {doc.file_size != null && (
+                    <span
+                      className="badge"
+                      style={{ background: "rgba(59,130,246,0.12)", color: "#3b82f6" }}
+                    >
+                      <Paperclip size={10} /> {formatFileSize(doc.file_size)}
+                    </span>
+                  )}
                   {linked && (
                     <span
                       className="badge"
@@ -213,6 +289,20 @@ export default function Documents() {
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       {formatDate(doc.expiry_date)}
                     </span>
+                  )}
+                  {!doc.file_path && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.25rem 0.5rem" }}
+                      title="Attach file"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAttachingDocId(doc.id);
+                        attachInputRef.current?.click();
+                      }}
+                    >
+                      <Upload size={14} />
+                    </button>
                   )}
                   <button
                     className="btn btn-ghost"
@@ -248,15 +338,79 @@ export default function Documents() {
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
             </div>
+
+            {/* File Upload */}
             <div className="form-group">
-              <label>URL</label>
+              <label>Upload File</label>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleFileSelect(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 8,
+                  padding: "1rem",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: dragOver ? "rgba(59,130,246,0.06)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                    e.target.value = "";
+                  }}
+                />
+                {selectedFile ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                    <Paperclip size={16} style={{ color: "var(--accent)" }} />
+                    <span style={{ color: "var(--text)" }}>{selectedFile.name}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                      ({formatFileSize(selectedFile.size)})
+                    </span>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.125rem 0.375rem", fontSize: "0.75rem" }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                    <Upload size={20} style={{ marginBottom: "0.25rem", opacity: 0.5 }} />
+                    <div>Drop a file here or click to browse</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>URL {selectedFile ? "(optional)" : ""}</label>
               <input
                 type="url"
                 placeholder="https://..."
                 value={form.url}
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
               />
+              {!selectedFile && !form.url && (
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  Provide a URL, upload a file, or both
+                </div>
+              )}
             </div>
+
             <div className="grid-2">
               <div className="form-group">
                 <label>Document Type</label>
@@ -313,7 +467,7 @@ export default function Documents() {
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.url}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
                 {editingId ? "Save Changes" : "Add Document"}
               </button>
             </div>
