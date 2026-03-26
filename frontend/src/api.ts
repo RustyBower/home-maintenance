@@ -437,6 +437,96 @@ export async function deleteContractor(id: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete contractor");
 }
 
+// === Notifications ===
+
+export interface NotificationChannel {
+  id: number;
+  name: string;
+  channel_type: "email" | "webhook" | "ntfy";
+  enabled: boolean;
+  config: Record<string, unknown>;
+  notify_overdue: boolean;
+  notify_due_today: boolean;
+  notify_upcoming_days: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DigestTask {
+  id: number;
+  name: string;
+  category: string;
+  priority: string;
+  next_due: string | null;
+}
+
+export interface DigestPreview {
+  overdue: DigestTask[];
+  due_today: DigestTask[];
+  upcoming: DigestTask[];
+  total_overdue: number;
+  total_due_today: number;
+  total_upcoming: number;
+}
+
+export async function fetchChannels(): Promise<NotificationChannel[]> {
+  const res = await fetch(`${API_BASE}/notifications/channels`);
+  if (!res.ok) throw new Error("Failed to fetch channels");
+  return res.json();
+}
+
+export async function createChannel(data: Omit<NotificationChannel, "id" | "created_at" | "updated_at">): Promise<NotificationChannel> {
+  const res = await fetch(`${API_BASE}/notifications/channels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create channel");
+  return res.json();
+}
+
+export async function updateChannel(id: number, data: Partial<NotificationChannel>): Promise<NotificationChannel> {
+  const res = await fetch(`${API_BASE}/notifications/channels/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update channel");
+  return res.json();
+}
+
+export async function deleteChannel(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/notifications/channels/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete channel");
+}
+
+export async function testChannel(id: number): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/notifications/channels/${id}/test`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Test failed" }));
+    throw new Error(err.detail || "Test failed");
+  }
+  return res.json();
+}
+
+export async function previewDigest(): Promise<DigestPreview> {
+  const res = await fetch(`${API_BASE}/notifications/preview`);
+  if (!res.ok) throw new Error("Failed to preview digest");
+  return res.json();
+}
+
+export async function sendDigest(): Promise<{ status: string; results: { channel: string; status: string }[] }> {
+  const res = await fetch(`${API_BASE}/notifications/send-digest`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to send digest");
+  return res.json();
+}
+
+export const CHANNEL_TYPES = [
+  { value: "email", label: "Email" },
+  { value: "webhook", label: "Webhook" },
+  { value: "ntfy", label: "ntfy" },
+] as const;
+
 export const PRIORITY_COLORS: Record<string, string> = {
   p1: "#ef4444",
   p2: "#f59e0b",

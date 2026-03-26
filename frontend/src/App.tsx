@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle } from "lucide-react";
+import { Home, List, Plus, Calendar, DollarSign, Package, Wrench, Settings, Box, Users, AlertCircle, Bell } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import TaskList from "./pages/TaskList";
 import TaskDetail from "./pages/TaskDetail";
@@ -15,6 +15,7 @@ import ContractorDetail from "./pages/ContractorDetail";
 import Repairs from "./pages/Repairs";
 import RepairDetail from "./pages/RepairDetail";
 import Setup from "./pages/Setup";
+import Notifications from "./pages/Notifications";
 import "./App.css";
 
 function App() {
@@ -53,6 +54,9 @@ function App() {
           <NavLink to="/supplies">
             <Package size={18} /> Supplies
           </NavLink>
+          <NavLink to="/notifications">
+            <Bell size={18} /> Notifications
+          </NavLink>
           <NavLink to="/tasks/new">
             <Plus size={18} /> Add Task
           </NavLink>
@@ -76,6 +80,7 @@ function App() {
             <Route path="/repairs" element={<Repairs />} />
             <Route path="/repairs/:id" element={<RepairDetail />} />
             <Route path="/supplies" element={<Supplies />} />
+            <Route path="/notifications" element={<Notifications />} />
             <Route path="/setup" element={<Setup />} />
           </Routes>
         </main>

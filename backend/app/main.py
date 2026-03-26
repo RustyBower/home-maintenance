@@ -8,6 +8,7 @@ from app.api.assets import router as assets_router
 from app.api.contractors import router as contractors_router
 from app.api.repairs import router as repairs_router
 from app.api.setup import router as setup_router
+from app.api.notifications import router as notifications_router
 
 app = FastAPI(title="Home Maintenance Tracker")
 
@@ -17,6 +18,7 @@ app.include_router(assets_router)
 app.include_router(contractors_router)
 app.include_router(repairs_router)
 app.include_router(setup_router)
+app.include_router(notifications_router)
 
 
 @app.get("/api/health")
